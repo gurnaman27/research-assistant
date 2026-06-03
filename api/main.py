@@ -1,28 +1,15 @@
+import threading
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-from contextlib import asynccontextmanager
-
-# Graph is initialized after uvicorn binds the port
-_graph = None
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Load heavy resources after the port is bound, not before."""
-    global _graph
-    from graph.workflow import graph
-    _graph = graph
-    yield
-
 
 app = FastAPI(
     title="Multi-Agent Research Assistant",
     description="Autonomous research assistant using LangGraph",
-    version="1.0.0",
-    lifespan=lifespan
+    version="1.0.0"
 )
 
 app.add_middleware(
@@ -37,6 +24,21 @@ app.mount(
     StaticFiles(directory="static"),
     name="static"
 )
+
+# Graph initialized lazily on first request (not at startup)
+# so uvicorn binds the port immediately and Render can detect it
+_graph = None
+_graph_lock = threading.Lock()
+
+
+def get_graph():
+    global _graph
+    if _graph is None:
+        with _graph_lock:
+            if _graph is None:
+                from graph.workflow import graph
+                _graph = graph
+    return _graph
 
 
 class ResearchRequest(BaseModel):
@@ -60,7 +62,7 @@ def health_check():
 @app.post("/research")
 def research(request: ResearchRequest):
     try:
-        result = _graph.invoke({"query": request.query})
+        result = get_graph().invoke({"query": request.query})
         return {
             "query": request.query,
             "report": result["final_report"]
