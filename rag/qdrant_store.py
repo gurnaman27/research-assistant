@@ -5,10 +5,18 @@ from qdrant_client.models import (
     VectorParams
 )
 
-client = QdrantClient(
-    host=os.getenv("QDRANT_HOST", "localhost"),
-    port=6333
-)
+_url = os.getenv("QDRANT_URL")
+_api_key = os.getenv("QDRANT_API_KEY")
+
+if _url:
+    # Qdrant Cloud
+    client = QdrantClient(url=_url, api_key=_api_key)
+else:
+    # Local Docker
+    client = QdrantClient(
+        host=os.getenv("QDRANT_HOST", "localhost"),
+        port=6333
+    )
 
 def create_collection():
 

@@ -13,10 +13,9 @@ model = SentenceTransformer(
     "all-MiniLM-L6-v2"
 )
 
-client = QdrantClient(
-    host=os.getenv("QDRANT_HOST", "localhost"),
-    port=6333
-)
+client = QdrantClient(url=os.getenv("QDRANT_URL"), api_key=os.getenv("QDRANT_API_KEY")) \
+    if os.getenv("QDRANT_URL") else \
+    QdrantClient(host=os.getenv("QDRANT_HOST", "localhost"), port=6333)
 
 # Ensure the collection exists before any indexing/retrieval
 create_collection()
