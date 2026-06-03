@@ -1,76 +1,77 @@
 import os
-from sentence_transformers import SentenceTransformer
-
-from qdrant_client import QdrantClient
-
-from qdrant_client.models import PointStruct
 import uuid
+
+from openai import OpenAI
+from qdrant_client import QdrantClient
+from qdrant_client.models import PointStruct
 
 from rag.qdrant_store import create_collection
 
+# Lightweight OpenAI embeddings — no PyTorch, no heavy dependencies
+openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-model = SentenceTransformer(
-    "all-MiniLM-L6-v2"
-)
-
-client = QdrantClient(url=os.getenv("QDRANT_URL"), api_key=os.getenv("QDRANT_API_KEY")) \
-    if os.getenv("QDRANT_URL") else \
+_qdrant_url = os.getenv("QDRANT_URL")
+client = QdrantClient(url=_qdrant_url, api_key=os.getenv("QDRANT_API_KEY")) \
+    if _qdrant_url else \
     QdrantClient(host=os.getenv("QDRANT_HOST", "localhost"), port=6333)
 
-# Ensure the collection exists before indexing (called lazily)
+
+def get_embedding(text: str) -> list:
+    """Get embedding vector from OpenAI text-embedding-3-small."""
+    response = openai_client.embeddings.create(
+        model="text-embedding-3-small",
+        input=text
+    )
+    return response.data[0].embedding
 
 
 def index_documents(results):
     # Create collection on first use
     create_collection()
 
-    texts = [
-        item.get("content", "")
-        for item in results
-    ]
-
-    vectors = model.encode(texts)
-
     points = []
 
-    for i, item in enumerate(results):
+    for item in results:
+        text = item.get("content", "")
+        if not text:
+            continue
+
+        vector = get_embedding(text)
 
         points.append(
             PointStruct(
                 id=str(uuid.uuid4()),
-                vector=vectors[i].tolist(),
+                vector=vector,
                 payload={
-                    "text": item.get("content", ""),
+                    "text": text,
                     "url": item.get("url", ""),
                     "title": item.get("title", "")
                 }
             )
         )
 
-    client.upsert(
-        collection_name="research_docs",
-        points=points
-    )
+    if points:
+        client.upsert(
+            collection_name="research_docs",
+            points=points
+        )
 
     print("Documents Indexed")
 
 
 def retrieve_docs(query):
 
-    query_vector = model.encode(
-        query
-    )
+    query_vector = get_embedding(query)
 
     results = client.query_points(
         collection_name="research_docs",
-        query=query_vector.tolist(),
+        query=query_vector,
         limit=5
     ).points
 
     docs = []
 
     for item in results:
-
         docs.append(
             {
                 "title": item.payload.get("title", ""),

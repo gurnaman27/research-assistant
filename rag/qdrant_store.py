@@ -32,7 +32,7 @@ def create_collection():
         client.create_collection(
             collection_name="research_docs",
             vectors_config=VectorParams(
-                size=384,
+                size=1536,
                 distance=Distance.COSINE
             )
         )
