@@ -17,11 +17,12 @@ client = QdrantClient(url=os.getenv("QDRANT_URL"), api_key=os.getenv("QDRANT_API
     if os.getenv("QDRANT_URL") else \
     QdrantClient(host=os.getenv("QDRANT_HOST", "localhost"), port=6333)
 
-# Ensure the collection exists before any indexing/retrieval
-create_collection()
+# Ensure the collection exists before indexing (called lazily)
 
 
 def index_documents(results):
+    # Create collection on first use
+    create_collection()
 
     texts = [
         item.get("content", "")

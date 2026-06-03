@@ -3,16 +3,28 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+from contextlib import asynccontextmanager
 
-from graph.workflow import graph
+# Graph is initialized after uvicorn binds the port
+_graph = None
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Load heavy resources after the port is bound, not before."""
+    global _graph
+    from graph.workflow import graph
+    _graph = graph
+    yield
+
 
 app = FastAPI(
     title="Multi-Agent Research Assistant",
-    description="Autonomous research assistant using LangGraph with Planner, Search, Writer, and Critic agents",
-    version="1.0.0"
+    description="Autonomous research assistant using LangGraph",
+    version="1.0.0",
+    lifespan=lifespan
 )
 
-# CORS middleware for cross-origin requests
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -20,7 +32,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount static files
 app.mount(
     "/static",
     StaticFiles(directory="static"),
@@ -34,13 +45,11 @@ class ResearchRequest(BaseModel):
 
 @app.get("/")
 def serve_frontend():
-    """Serve the main UI."""
     return FileResponse("static/index.html")
 
 
 @app.get("/health")
 def health_check():
-    """Health check endpoint for monitoring."""
     return {
         "status": "healthy",
         "service": "research-assistant",
@@ -50,21 +59,12 @@ def health_check():
 
 @app.post("/research")
 def research(request: ResearchRequest):
-    """Run the full multi-agent research pipeline."""
-
     try:
-        result = graph.invoke(
-            {
-                "query": request.query
-            }
-        )
-
+        result = _graph.invoke({"query": request.query})
         return {
             "query": request.query,
-            "report":
-            result["final_report"]
+            "report": result["final_report"]
         }
-
     except Exception as e:
         raise HTTPException(
             status_code=500,
