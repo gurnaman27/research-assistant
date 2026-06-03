@@ -13,9 +13,10 @@ COPY cache/ cache/
 COPY graph/ graph/
 COPY rag/ rag/
 COPY static/ static/
+COPY start.py .
 
 # Expose default port (Render overrides with $PORT)
 EXPOSE 8000
 
-# Use shell form so $PORT is evaluated at runtime
-CMD ["sh", "-c", "uvicorn api.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# start.py reads $PORT at runtime
+CMD ["python", "start.py"]
